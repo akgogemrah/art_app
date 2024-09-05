@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "201278458575",
+    "project_id": "art-app-ef568",
+    "storage_bucket": "art-app-ef568.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:201278458575:android:885619ede8a33fb81e05ba",
+        "android_client_info": {
+          "package_name": "com.example.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCL2yFSaeHI7Mje_Zhx6HK2F8qtDPhI2JE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
