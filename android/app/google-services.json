@@ -2,17 +2,22 @@
   "project_info": {
     "project_number": "201278458575",
     "project_id": "art-app-ef568",
-    "storage_bucket": "art-app-ef568.appspot.com"
+    "storage_bucket": "art-app-ef568.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
         "mobilesdk_app_id": "1:201278458575:android:885619ede8a33fb81e05ba",
         "android_client_info": {
-          "package_name": "com.example.art_app"
+          "package_name": "com.example.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "201278458575-5tds2e5cm2i03f8m8t9a3qnc7gqrptq3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCL2yFSaeHI7Mje_Zhx6HK2F8qtDPhI2JE"
@@ -20,7 +25,55 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "201278458575-5tds2e5cm2i03f8m8t9a3qnc7gqrptq3.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "201278458575-l3nv0h9ndnh7c9dhqgpoll37nbi1p18l.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.artApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:201278458575:android:14baff91f4b6f6041e05ba",
+        "android_client_info": {
+          "package_name": "com.example.art_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "201278458575-5tds2e5cm2i03f8m8t9a3qnc7gqrptq3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCL2yFSaeHI7Mje_Zhx6HK2F8qtDPhI2JE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "201278458575-5tds2e5cm2i03f8m8t9a3qnc7gqrptq3.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "201278458575-l3nv0h9ndnh7c9dhqgpoll37nbi1p18l.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.artApp"
+              }
+            }
+          ]
         }
       }
     }

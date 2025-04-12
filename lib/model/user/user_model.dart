@@ -5,7 +5,6 @@ class UserModel {
   String lastSignedIn;
   String name;
   String platform;
-
   String userId;
 
   UserModel({
@@ -15,21 +14,19 @@ class UserModel {
     required this.lastSignedIn,
     required this.name,
     required this.platform,
-
     required this.userId,
   });
 
   // JSON'dan UserModel'e dönüştürmek için factory metod
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      authType: json['auth_type']??"",
-      creationTime: json['creation_time']??"",
-      email: json['email']??"",
-      lastSignedIn: json['last_signed_in']??"",
-      name: json['name']??"",
-      platform: json['platform']??"",
-
-      userId: json['user_id']??"",
+      authType: json['auth_type'] ?? "",
+      creationTime: json['creation_time'] ?? "",
+      email: json['email'] ?? "",
+      lastSignedIn: json['last_signed_in'] ?? "",
+      name: json['name'] ?? "",
+      platform: json['platform'] ?? "",
+      userId: json['user_id'] ?? "",
     );
   }
 
@@ -42,7 +39,6 @@ class UserModel {
       'last_signed_in': lastSignedIn,
       'name': name,
       'platform': platform,
-
       'user_id': userId,
     };
   }

@@ -10,19 +10,22 @@ class MainBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: MainAppColors.mainAppBarBackButton,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
+    return GestureDetector(
+      onTap: (){Navigator.pop(context);},
+      child: Container(
+        decoration: BoxDecoration(
+          color: MainAppColors.mainAppBarBackButton,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: MainAppColors.mainAppBartxtcOLOR,
+          ),
+        ),
+        height: 80,
+        width: 30,
+        child: Icon(
+          Icons.arrow_back_ios,
           color: MainAppColors.mainAppBartxtcOLOR,
         ),
-      ),
-      height: 80,
-      width: 30,
-      child: Icon(
-        Icons.arrow_back_ios,
-        color: MainAppColors.mainAppBartxtcOLOR,
       ),
     );
   }
