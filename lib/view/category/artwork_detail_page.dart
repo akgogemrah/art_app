@@ -4,6 +4,7 @@ import 'package:art_app/main_widgets/app_bar/main_appbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../model/user/user_model.dart';
+import '../../service/image_recognazitioon/imaga_service.dart';
 import '../add_art_page/model/art_model.dart';
 
 class ArtworkDetailPage extends StatefulWidget {
@@ -26,14 +27,125 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
   bool _processingFavorite = false;
   int _favoriteCount = 0;
 
+  // Imagga ile ilgili değişkenler
+  String _artworkDescription = "";
+  bool _analyzingImage = false;
+  List<String> _artworkTags = [];
+  Map<String, dynamic> _artworkColors = {};
+
   @override
   void initState() {
     super.initState();
     _getCurrentUser();
     _fetchArtistData();
     _fetchFavoriteCount();
+    _checkForExistingAnalysis(); // Önce mevcut analizi kontrol et
   }
 
+  // Firestore'da mevcut analiz var mı kontrol et
+  void _checkForExistingAnalysis() async {
+    try {
+      DocumentSnapshot artworkDoc = await FirebaseFirestore.instance
+          .collection('artworks')
+          .doc(widget.artwork.id)
+          .get();
+
+      if (artworkDoc.exists) {
+        Map<String, dynamic> data = artworkDoc.data() as Map<String, dynamic>;
+
+        if (data.containsKey('aiDescription') &&
+            data['aiDescription'] != null) {
+          // Mevcut analiz var, verileri yükle
+          setState(() {
+            _artworkDescription = data['aiDescription'];
+            _artworkTags = List<String>.from(data['aiTags'] ?? []);
+
+            // Renk verisi varsa onu da yükle
+            if (data.containsKey('aiColors')) {
+              _artworkColors = data['aiColors'];
+            }
+          });
+        } else {
+          // Analiz yok, yeni analiz başlat
+          _analyzeArtworkImage();
+        }
+      } else {
+        // Eser dokümanı yok, analiz başlat
+        _analyzeArtworkImage();
+      }
+    } catch (e) {
+      print('Analiz kontrolü hatası: $e');
+      _analyzeArtworkImage(); // Hata durumunda analiz başlat
+    }
+  }
+
+  // Imagga API ile resmi analiz et
+  void _analyzeArtworkImage() async {
+    if (widget.artwork.imageUrl.isEmpty) return;
+
+    setState(() {
+      _analyzingImage = true;
+    });
+
+    try {
+      // Etiketleri al
+      final tagsResult = await ImaggaService.getTags(widget.artwork.imageUrl);
+      print('Tags API sonucu: ${tagsResult.containsKey('error') ? tagsResult['error'] : 'başarılı'}');
+
+      // Renkleri al
+      final colorsResult = await ImaggaService.getColors(widget.artwork.imageUrl);
+      print('Colors API sonucu: ${colorsResult.containsKey('error') ? colorsResult['error'] : 'başarılı'}');
+
+      // Etiketleri kaydet
+      if (tagsResult.containsKey('result') &&
+          tagsResult['result'].containsKey('tags') &&
+          tagsResult['result']['tags'].isNotEmpty) {
+        List<String> tags = [];
+        for (var tag in tagsResult['result']['tags']) {
+          if (tag['confidence'] > 30) { // Sadece güven skoru yüksek etiketleri al
+            tags.add(tag['tag']['en']);
+          }
+        }
+
+        setState(() {
+          _artworkTags = tags;
+        });
+      }
+
+      // Renkleri kaydet
+      if (colorsResult.containsKey('result') &&
+          colorsResult['result'].containsKey('colors')) {
+        setState(() {
+          _artworkColors = colorsResult['result']['colors'];
+        });
+      }
+
+      // Açıklama oluştur
+      final description = ImaggaService.generateDescription(tagsResult, colorsResult);
+
+      // Firestore'da eserin dokümanına açıklamayı kaydet
+      await FirebaseFirestore.instance
+          .collection('artworks')
+          .doc(widget.artwork.id)
+          .update({
+        'aiDescription': description,
+        'aiTags': _artworkTags,
+        'aiColors': _artworkColors,
+        'analyzedAt': FieldValue.serverTimestamp(),
+      });
+
+      setState(() {
+        _artworkDescription = description;
+        _analyzingImage = false;
+      });
+    } catch (e) {
+      print('Resim analiz hatası: $e');
+      setState(() {
+        _artworkDescription = "Bu eser için otomatik analiz yapılırken bir hata oluştu.";
+        _analyzingImage = false;
+      });
+    }
+  }
   void _getCurrentUser() {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -55,7 +167,8 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
 
       if (documentSnapshot.exists) {
         setState(() {
-          _artist = UserModel.fromJson(documentSnapshot.data() as Map<String, dynamic>);
+          _artist = UserModel.fromJson(
+              documentSnapshot.data() as Map<String, dynamic>);
           _isLoading = false;
         });
       } else {
@@ -152,10 +265,15 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
           // Use transaction to safely update counter
           await FirebaseFirestore.instance.runTransaction((transaction) async {
             DocumentSnapshot freshSnapshot = await transaction.get(artworkRef);
-            Map<String, dynamic> data = freshSnapshot.data() as Map<String, dynamic>;
+            Map<String, dynamic> data = freshSnapshot.data() as Map<
+                String,
+                dynamic>;
 
-            int currentCount = data['favoriteCount'] ?? 1; // Default to 1 if not set
-            int newCount = currentCount > 0 ? currentCount - 1 : 0; // Prevent negative counts
+            int currentCount = data['favoriteCount'] ??
+                1; // Default to 1 if not set
+            int newCount = currentCount > 0
+                ? currentCount - 1
+                : 0; // Prevent negative counts
 
             transaction.update(artworkRef, {'favoriteCount': newCount});
 
@@ -183,7 +301,9 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
           await FirebaseFirestore.instance.runTransaction((transaction) async {
             DocumentSnapshot freshSnapshot = await transaction.get(artworkRef);
             if (freshSnapshot.exists) {
-              Map<String, dynamic> data = freshSnapshot.data() as Map<String, dynamic>;
+              Map<String, dynamic> data = freshSnapshot.data() as Map<
+                  String,
+                  dynamic>;
               int currentCount = data['favoriteCount'] ?? 0;
               int newCount = currentCount + 1;
 
@@ -276,7 +396,10 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
                 // Artwork image
                 Container(
                   width: double.infinity,
-                  height: MediaQuery.of(context).size.height * 0.6,
+                  height: MediaQuery
+                      .of(context)
+                      .size
+                      .height * 0.6,
                   child: Image.network(
                     widget.artwork.imageUrl,
                     fit: BoxFit.cover,
@@ -297,7 +420,10 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
                 // Gradient overlay for readability
                 Container(
                   width: double.infinity,
-                  height: MediaQuery.of(context).size.height * 0.6,
+                  height: MediaQuery
+                      .of(context)
+                      .size
+                      .height * 0.6,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
@@ -319,7 +445,8 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.pink.shade400,
                           borderRadius: BorderRadius.circular(20),
@@ -397,7 +524,8 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
                       ),
                       // Favorite counter with heart icon
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.3),
                           borderRadius: BorderRadius.circular(12),
@@ -428,7 +556,9 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
                       SizedBox(width: 8),
                       // Favorite button
                       IconButton(
-                        onPressed: _currentUserId != null ? _toggleFavorite : null,
+                        onPressed: _currentUserId != null
+                            ? _toggleFavorite
+                            : null,
                         icon: Icon(
                           _isFavorite ? Icons.favorite : Icons.favorite_border,
                           color: _isFavorite ? Colors.red : Colors.white,
@@ -457,24 +587,145 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
 
                   SizedBox(height: 24),
 
-                  // Artwork description section
-                  Text(
-                    "Eser Açıklaması",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  // Artwork description section - Imagga ile güncellendi
+                  Row(
+                    children: [
+                      Text(
+                        "Eser Açıklaması",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      if (_analyzingImage)
+                        SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.pink.shade400,
+                            )
+                        ),
+                      if (!_analyzingImage && _artworkTags.isNotEmpty)
+                        Icon(
+                          Icons.auto_awesome,
+                          color: Colors.pink.shade400,
+                          size: 16,
+                        ),
+                    ],
                   ),
                   SizedBox(height: 8),
                   Text(
-                    "Bu ${widget.artwork.category} eseri, sanatçı ${_artist?.name ?? 'Bilinmeyen Sanatçı'} tarafından yaratılmıştır. Eser, sanat koleksiyonunuza değer katacak nitelikte bir çalışmadır.",
+                    _analyzingImage
+                        ? "Eser yapay zeka tarafından analiz ediliyor..."
+                        : (_artworkDescription.isNotEmpty
+                        ? _artworkDescription
+                        : "Bu ${widget.artwork
+                        .category} eseri, sanatçı ${_artist?.name ??
+                        'Bilinmeyen Sanatçı'} tarafından yaratılmıştır. Eser, sanat koleksiyonunuza değer katacak nitelikte bir çalışmadır."),
                     style: TextStyle(
                       color: Colors.grey.shade300,
                       fontSize: 16,
                       height: 1.5,
                     ),
                   ),
+
+                  // Etiketler bölümü
+                  if (_artworkTags.isNotEmpty) ...[
+                    SizedBox(height: 16),
+                    Text(
+                      "Yapay Zeka Etiketleri",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _artworkTags.take(10).map((tag) {
+                        return Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.grey.shade800,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+
+                  SizedBox(height: 24),
+
+                  // Renk analizi bölümü
+                  if (_artworkColors.isNotEmpty &&
+                      _artworkColors.containsKey('foreground_colors') &&
+                      _artworkColors['foreground_colors'].isNotEmpty) ...[
+                    Text(
+                      "Renk Analizi",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Container(
+                      height: 60,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _artworkColors['foreground_colors'].length,
+                        itemBuilder: (context, index) {
+                          final color = _artworkColors['foreground_colors'][index];
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: _hexToColor(color['html_code']),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  '${(color['percent'] as num).toStringAsFixed(
+                                      0)}%',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                  ],
 
                   SizedBox(height: 24),
 
@@ -508,7 +759,13 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
                         Divider(color: Colors.grey.shade800, height: 24),
                         _buildDetailRow("Eser ID", widget.artwork.id),
                         Divider(color: Colors.grey.shade800, height: 24),
-                        _buildDetailRow("Favori Sayısı", _favoriteCount.toString()),
+                        _buildDetailRow(
+                            "Favori Sayısı", _favoriteCount.toString()),
+                        if (_artworkTags.isNotEmpty) ...[
+                          Divider(color: Colors.grey.shade800, height: 24),
+                          _buildDetailRow("AI Etiket Sayısı",
+                              _artworkTags.length.toString()),
+                        ],
                       ],
                     ),
                   ),
@@ -521,7 +778,8 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
                       // Contact functionality
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Sanatçı ile iletişim kurma özelliği yakında!'),
+                          content: Text(
+                              'Sanatçı ile iletişim kurma özelliği yakında!'),
                           duration: Duration(seconds: 2),
                         ),
                       );
@@ -581,7 +839,7 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
 
                   SizedBox(height: 30),
 
-                  // Similar artworks title (placeholder for future feature)
+                  // Benzer eserler bölümü - Imagga analizi ile geliştirilmiş
                   Text(
                     "Benzer Eserler",
                     style: TextStyle(
@@ -592,8 +850,10 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
                   ),
                   SizedBox(height: 16),
 
-                  // Placeholder for similar artworks
-                  Text(
+                  // Benzer eserler listesi - gelecekte AI etiketlerine göre öneri yapılabilir
+                  _artworkTags.isNotEmpty
+                      ? Container()
+                      : Text(
                     "Henüz benzer eser bulunamadı. Daha fazla içerik için kategorileri keşfedin.",
                     style: TextStyle(
                       color: Colors.grey.shade400,
@@ -633,4 +893,12 @@ class _ArtworkDetailPageState extends State<ArtworkDetailPage> {
       ],
     );
   }
+}
+// Hex renk kodunu Color nesnesine dönüştüren yardımcı metod
+Color _hexToColor(String hexCode) {
+  hexCode = hexCode.replaceAll('#', '');
+  if (hexCode.length == 6) {
+    return Color(int.parse('FF$hexCode', radix: 16));
+  }
+  return Colors.grey;
 }
